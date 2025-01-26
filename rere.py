@@ -418,7 +418,6 @@ def makeRequest(method: str, url: str, header: 'dict[str,str]', body: str):
             if cookies:
                 director.add_handler(HTTPCookieProcessor(cookies))
             response: 'HTTPResponse' = director.open(request, timeout=timeout)
-            print('reponse',response)
             templates['response.code'] = response.status
             templates['response.header'] = '\n'.join([f"{k}: {v}" for k,v in response.getheaders()])
             templates['response.body'] = response.read().decode()
