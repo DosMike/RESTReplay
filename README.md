@@ -27,11 +27,11 @@ baseUri https://localhost:9200/
 
 GET /index/_search
 Authorization: {{ env.API_KEY }}
-:delimiter:807934670589335670389
+:
 {
     query: { match: { _id: "someid" } }
 }
-:delimiter:807934670589335670389
+:
 ```
 
 ### Requests
@@ -129,9 +129,9 @@ envFile .env
 read request_body.json: body
 GET https://localhost:3000/main_endpoint
 Authorization: {{ env.API_KEY }}
-:delimiter:3975039763917301945679031456
+:
 {{ body }}
-:delimiter:3975039763917301945679031456
+:
 
 set value: {{ response.body }}
 
