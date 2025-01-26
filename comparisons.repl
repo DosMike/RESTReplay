@@ -1,0 +1,51 @@
+# this is a test file for conditions
+# this file should never fail, and testResult.txt should not contain a single Failed
+
+set a: 1
+set b: 2
+
+set test1: Failed
+if a < b
+set test1: Passed
+
+set test2: Passed
+if a > b
+set test2: Failed
+
+set test3: Failed
+if a in [ -1000000.000 .. 9999999999 ]
+set test3: Passed
+
+set test4: Passed
+if a in [ 0 .. 0.999 ]
+set test4: Failed
+
+set test5: Passed
+if a in [ 1.5 .. b ]
+set test5: Failed
+
+set text: abc123efg
+
+set test6: Failed
+if 1 in text
+set test6: Passed
+
+set test7: Failed
+if "ef" in text
+set test7: Passed
+
+set test8: Failed
+if not "banana" in text
+set test8: Passed
+
+set regex: ^\w+$
+
+set test9: Failed
+if text matches regex
+set test9: Passed
+
+set summary: {{ test1 }} {{ test2 }} {{ test3 }} {{ test4 }} {{ test5 }} {{ test6 }} {{ test7 }} {{ test8 }} {{ test9 }}
+write testRestult.txt: {{ summary }}
+
+if "Failed" in summary
+exit 1
