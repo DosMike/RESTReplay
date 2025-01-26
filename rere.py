@@ -514,7 +514,7 @@ if __name__ == '__main__':
              prog='REST Replay',
              description='Replay templated rest requests',
              epilog=f'Version {version} - https://github.com/DosMike/RestReplay')
-    parser.add_argument('script', type=Path, nargs='?', help='The REST Replay script to run. If omitted, displays help.')
+    parser.add_argument('script', type=Path, nargs='?', help='The REST Replay script to run. Use dash to read from stdin. If omitted, displays help.')
     parser.add_argument('--dry', action='store_true', help='Make a dry run. Requests are not actually fired but response values are filled with values. Because the response body often requires structure, mileage will vary.')
     parser.add_argument('--verbose', action='store_true', help='Verbose logging, for debugging purposes.')
     parser.add_argument('--version', action='store_true', help='Ignore everything and print version.')
@@ -529,10 +529,13 @@ if __name__ == '__main__':
     verbose = args.verbose
     dryRun = args.dry
     # we want relative files to be relative to the script, not PWD, so chdir
-    if not os.path.isfile(args.script):
+    if str(args.script) == '-':
+        main([line for line in sys.stdin.readlines()])
+    elif not os.path.isfile(args.script):
         die('Could not open script file')
-    absScript = os.path.abspath(args.script)
-    os.chdir(os.path.dirname(absScript))
-    # now read and run
-    with open(absScript,'r') as f:
-        main([line for line in f.readlines()])
+    else:
+        absScript = os.path.abspath(args.script)
+        os.chdir(os.path.dirname(absScript))
+        # now read and run
+        with open(absScript,'r') as f:
+            main([line for line in f.readlines()])
