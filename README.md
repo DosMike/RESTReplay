@@ -13,6 +13,26 @@ The replay files are not intended to house complex logic, but instead work in ta
 * `--verbose` for debugging
 * `script` the REST Replay script to run
 
+To create a simple script:
+* Open the dev tools in your browser
+* Make a request
+* Right click and copy request headers
+* Paste it into a text editor
+* Copy paste the request body below between two identical lines (delimiters, see below)
+* Add a line above with baseUrl scheme://netloc/
+
+```
+baseUrl https://example.tld/
+PASTE REQUEST HEADERS
+
+PASTE REQUEST BODY
+
+# empty line above is important, if you want to use empty lines as delimiter
+# if your body contains empty lines, use anything else that doesn't look like a header, like a dot or colon or whatever
+```
+
+These scripts are mostly compatible with .http/.rest files.
+
 ## Format
 
 Empty lines and lines starting with # are comments
