@@ -675,7 +675,7 @@ def main(script: 'list[str]') -> int:
         else:
             die(f'Unknown command or request method "{word1}"')
 
-version = '1.0.0'
+version = '1.1.0'
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
              prog='REST Replay',
