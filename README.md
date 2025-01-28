@@ -44,14 +44,21 @@ The script steps are validated as they are executed, terminating early ony synta
 e.g.
 ```bash
 baseUri https://localhost:9200/
+defaultHeader Authorization: {{ env.API_KEY }}
 
 GET /index/_search
-Authorization: {{ env.API_KEY }}
+Content-Type: application/json
 :
 {
-    query: { match: { _id: "someid" } }
+  query: { match: { _id: "someid" } }
 }
 :
+
+mode elastic
+GET /index/_search
+{
+  query: { match: { _id: "someid" } }
+}
 ```
 
 ### Requests
