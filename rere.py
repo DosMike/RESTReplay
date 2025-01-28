@@ -655,6 +655,10 @@ def main(script: 'list[str]') -> int:
             filtered(cmdDefaultHeader, rest)
         elif word1 == 'set':
             filtered(cmdSet, rest)
+        elif word1 == 'parseTemplates':
+            pass #filtered(cmdParseTemplate, rest)
+        elif word1 == 'replace':
+            pass #filtered(cmdReplace, rest)
         elif word1 == 'read':
             filtered(cmdRead, rest)
         elif word1 == 'write':
