@@ -133,6 +133,36 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   > Defaults to /tmp/restreplay.cache on linux, C:\Users\\\<username>\AppData\Local\Temp on windows
   >
   > *Default:* unset, cookies are not stored on disc.
+* sslContext OPTIONS/default
+  > OPTIONS is a set of comma separated list of `key: value` pairs, with quoted values. These options map closely to the python [SSLContext](https://docs.python.org/3/library/ssl.html#ssl-contexts) object. All supported keys are optional. An abbreviated summary is provided for convenience. Check the linked python docs for more information. _**If unsure, leave unset**_. If you want to revert to default values, use `sslContext default` instead.
+  > * cafile : path to a file of concatenated CA certificates in PEM format
+  > * capath : path to a directory containing several CA certificates in PEM format
+  > * mode :
+  >   * NONE : just about any cert is accepted. Validation errors, such as untrusted or expired cert, are ignored and do not abort the TLS/SSL handshake
+  >   * REQUIRED (default) : certificates are required from the other side of the socket connection; an SSLError will be raised if no certificate is provided, or if its validation fails. As PROTOCOL_TLS_CLIENT is set by default, this will validate hostnames.
+  >   * UNCHECKED : This is like REQUIRED, but hostname checks are explicitly turned off. This mode is not sufficient to verify a certificate in client mode as it does not match hostnames.
+  > * verify : (these are additive, so you have to re-add defaults if set)
+  >   * CRL_UNCHECKED (default) : in this mode, certificate revocation lists (CRLs) are not checked (VERIFY_DEFAULT)
+  >   * CRL_CHECK_LEAF : only the peer cert is checked but none of the intermediate CA certificates
+  >   * CRL_CHECK_CHAIN : CRLs of all certificates in the peer cert chain are checked
+  >   * X509_STRICT (default) : disable workarounds for broken X.509 certificates
+  >   * ALLOW_PROXY_CERTS : enables proxy certificate verification
+  >   * X509_TRUSTED_FIRST (default) : instructs OpenSSL to prefer trusted certificates when building the trust chain to validate a certificate
+  >   * X509_PARTIAL_CHAIN (default) : instructs OpenSSL to accept intermediate CAs in the trust store to be treated as trust-anchors, in the same way as the self-signed root CA certificates
+  > * protocol : (SSL2 / SSL3 are not supported)
+  >   * TLS (default) : auto-negotiate the highest protocol version that both the client and server support
+  >   * TLSv1.0 : selects TLS version 1.0 as the channel encryption protocol
+  >   * TLSv1.1 : selects TLS version 1.1 as the channel encryption protocol
+  >   * TLSv1.2 : selects TLS version 1.2 as the channel encryption protocol
+  > * options : (protocol options are not supported, NO_SSLv2 | NO_SSLv3 are always set)
+  >   * NO_RENEGOTIATION : disable all renegotiation in TLSv1.2 and earlier
+  >   * ENABLE_MIDDLEBOX_COMPAT : send dummy Change Cipher Spec (CCS) messages in TLS 1.3 handshake to make a TLS 1.3 connection look more like a TLS 1.2 connection
+  >   * NO_COMPRESSION : disable compression on the SSL channel
+  >   * NO_TICKET : prevent client side from requesting a session ticket
+  >   * IGNORE_UNEXPECTED_EOF : ignore unexpected shutdown of TLS connections
+  >   * ENABLE_KTLS : enable the use of the kernel TLS
+  >
+  > example: `sslContext cafile: "/path/to/cacert.pem", protocol: "TLS", options: "NO_RENEGOTIATION, NO_COMPRESSION"`
 * eval \<KEY>: \<EXRPESSION>
   > Run a java-script one-liner and store the result to KEY.
   > This requires js2py or pythonmonkey to be installed.

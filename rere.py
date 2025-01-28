@@ -12,6 +12,8 @@ from http.client import HTTPResponse
 from tempfile import gettempdir
 import traceback
 import json
+import ssl
+from typing import NoReturn
 
 
 try:
@@ -46,9 +48,10 @@ cookieStorage: 'str|None' = None
 
 line = 0
 testFilterState = True
+sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
 
 
-def die(message: str, code: int = 1) -> None:
+def die(message: str, code: int = 1) -> NoReturn:
     print(f'Line {line}:',message)
     sys.exit(code)
 
@@ -331,6 +334,9 @@ def cmdMode(args: str):
     else:
         die(f'Unknown request parse mode "{args}"')
 
+    if verbose:
+        print(f'Set mode to {requestParseMode}')
+
 
 def updateStorage():
     global cookies
@@ -375,6 +381,111 @@ def cmdStorage(args: str):
 
     if verbose:
         print(f'Set storage to {storageTimeout}sec at',storagePath)
+
+
+def cmdSslContext(args: str):
+    global sslContext
+
+    if args.strip().lower() == 'default':
+        sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        return
+
+    kvStore: 'dict[str,str]' = dict()
+    knownKeys = ('cafile', 'capath', 'protocol', 'mode', 'verify', 'options')
+    regexElement = r'"(?:\\[\\"rnt]|[^\\])+"'
+    regexKeyValue = f'(?:\\w+)\\s*:\\s*{regexElement}'
+    regexConfig = f'^{regexKeyValue}(?:\\s*,\\s*{regexKeyValue})*$'
+    if not re.match(regexConfig, args):
+        die('Invalid key value syntax for sslContext arguments')
+    # capture one key value and eat the possible delimiter
+    regexKeyValue = re.compile(f'^(\\w+)\\s*:\\s*({regexElement})(?:\\s*,\\s*)?')
+    while args:
+        match = regexKeyValue.match(args)
+        [key, value] = [json.loads(grp) if grp and grp.startswith('"') else grp for grp in match[1:]]
+        args = args[len(match[0]):]
+        if not key.lower() in knownKeys:
+            die(f'Unknown sslContext parameter: {key}')
+        kvStore[key.lower()] = value
+
+    cafile = kvStore.get('cafile', None)
+    capath = kvStore.get('capath', None)
+    try:
+        sslContext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=cafile, capath=capath)
+    except Exception as e:
+        if verbose:
+            traceback.print_exc()
+        die(f'Failed to create sslContext')
+
+    if 'protocol' in kvStore:
+        rawProtocol = kvStore['protocol'].lower()
+        if rawProtocol == 'tlsv1.0':
+            sslContext.protocol = ssl.PROTOCOL_TLSv1
+        elif rawProtocol == 'tlsv1.1':
+            sslContext.protocol = ssl.PROTOCOL_TLSv1_1
+        elif rawProtocol == 'tlsv1.2':
+            sslContext.protocol = ssl.PROTOCOL_TLSv1_2
+        elif rawProtocol == 'tls':
+            sslContext.protocol = ssl.PROTOCOL_TLS_CLIENT
+        else:
+            die('Unsupported protocol version (expected one of: TLS, TLSv1.0, TLSv1.1, TLSv1.2)')
+
+    if 'mode' in kvStore:
+        rawVerifyMode = kvStore['mode'].lower()
+        if rawVerifyMode == 'none':
+            sslContext.verify_mode = ssl.CERT_NONE
+        elif rawVerifyMode == 'required':
+            sslContext.verify_mode = ssl.CERT_REQUIRED
+        elif rawVerifyMode == 'unchecked':
+            sslContext.verify_mode = ssl.CERT_REQUIRED
+            sslContext.check_hostname = False
+        else:
+            die('Unsupported mode (expected one of: NONE, REQUIRED)')
+
+    if 'verify' in kvStore:
+        rawVerifyFlags = [x.strip().lower() for x in kvStore['verify'].split(',')]
+        verifyFlags = ssl.VerifyFlags.VERIFY_DEFAULT
+        for flag in rawVerifyFlags:
+            if flag == 'crl_uncheck':
+                pass
+            if flag == 'crl_check_leaf':
+                verifyFlags = verifyFlags | ssl.VerifyFlags.VERIFY_CRL_CHECK_LEAF
+            elif flag == 'crl_check_chain':
+                verifyFlags = verifyFlags | ssl.VerifyFlags.VERIFY_CRL_CHECK_CHAIN
+            elif flag == 'x509_strict':
+                verifyFlags = verifyFlags | ssl.VerifyFlags.VERIFY_X509_STRICT
+            elif flag == 'allow_proxy_certs':
+                verifyFlags = verifyFlags | ssl.VerifyFlags.VERIFY_ALLOW_PROXY_CERTS
+            elif flag == 'x509_trusted_first':
+                verifyFlags = verifyFlags | ssl.VerifyFlags.VERIFY_X509_TRUSTED_FIRST
+            elif flag == 'x509_partial_chain':
+                verifyFlags = verifyFlags | ssl.VerifyFlags.VERIFY_X509_PARTIAL_CHAIN
+            else:
+                die(f'Unknown verify flag {flag} (expected one or more of: CRL_UNCHECK, CRL_CHECK_LEAF, CRL_CHECK_CHAIN, X509_STRICT, ALLOW_PROXY_CERTS, X509_TRUSTED_FIRST, X509_PARTIAL_CHAIN)')
+        sslContext.verify_flags = verifyFlags
+
+    if 'options' in kvStore:
+        rawOptions = [x.strip().lower() for x in kvStore.get['options'].split(',')]
+        options = ssl.OP_ALL | ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
+        for option in rawOptions:
+            if option == 'no_renegotiation':
+                options = options | ssl.OP_NO_RENEGOTIATION
+            elif option == 'enable_middlebox_compat':
+                options = options | ssl.OP_ENABLE_MIDDLEBOX_COMPAT
+            elif option == 'no_compression':
+                options = options | ssl.OP_NO_COMPRESSION
+            elif option == 'no_ticket':
+                options = options | ssl.OP_NO_TICKET
+            elif option == 'ignore_unexpected_eof':
+                options = options | ssl.OP_IGNORE_UNEXPECTED_EOF
+            elif option == 'enable_ktls':
+                options = options | ssl.OP_ENABLE_KTLS
+            else:
+                die(f'Unsupported option {option} (expected one or more of: NO_RENEGOTIATION, ENABLE_MIDDLEBOX_COMPAT, NO_COMPRESSION, NO_TICKET, IGNORE_UNEXPECTED_EOF, ENABLE_KTLS)')
+        sslContext.options = options
+
+    if verbose:
+        print(f'Set mode to {requestParseMode}')
+
 
 def cmdEval(args: str):
     global templates
@@ -425,7 +536,7 @@ def makeRequest(method: str, url: str, header: 'dict[str,str]', body: str):
             request = Request(urlunparse(urlParts), body.encode(), header, method=method)
             director = OpenerDirector()
             director.add_handler(HTTPHandler(2 if verbose else 0))
-            director.add_handler(HTTPSHandler(2 if verbose else 0))
+            director.add_handler(HTTPSHandler(2 if verbose else 0, sslContext))
             director.add_handler(HTTPRedirectHandler())
             if cookies:
                 director.add_handler(HTTPCookieProcessor(cookies))
@@ -435,7 +546,7 @@ def makeRequest(method: str, url: str, header: 'dict[str,str]', body: str):
             templates['response.body'] = response.read().decode()
         except Exception as e:
             if verbose:
-                print(traceback.print_exc())
+                traceback.print_exc()
             die(f"Unexpected error during request\n{str(e)}")
 
     if verbose:
@@ -547,6 +658,8 @@ def main(script: 'list[str]') -> int:
             filtered(cmdCookies, rest)
         elif word1 == 'storage':
             filtered(cmdStorage, rest)
+        elif word1 == 'sslContext':
+            filtered(cmdSslContext, rest)
         elif word1 == 'eval':
             filtered(cmdEval, rest)
         elif word1 == 'if':
