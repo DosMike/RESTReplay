@@ -4,11 +4,10 @@ delimiter ${ token }
 timeout 3s
 defaultHeader User-Agent: RESTReplay/0.1 (Indev)
 
-baseUrl https://randomuser.me/api/
-GET
-Content-Type: application/xml
-.
-.
+baseUrl https://randomuser.me/
+mode elastic
+GET /api/
 
-if response.code in [ 200..299 ]
-write response.txt: ${ response.body }
+#if response.code in [ 200..299 ]
+#write response.txt: ${ response.body }
+

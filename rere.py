@@ -38,6 +38,7 @@ baseUrl: ParsedURL = None
 defaultHeader = dict()
 delimiter = ['{{','}}']
 timeout = 3
+requestParseMode = 'rest'
 
 cookies: 'CookieJar|None' = None
 cookiesEnabled = False
@@ -320,6 +321,17 @@ def cmdWrite(args: str):
         print(f'Wrote value to file {file}')
 
 
+def cmdMode(args: str):
+    global requestParseMode
+
+    if args.lower() == 'elastic':
+        requestParseMode = 'elastic'
+    elif args.lower() in ('rest', 'http'):
+        requestParseMode = 'rest'
+    else:
+        die(f'Unknown request parse mode "{args}"')
+
+
 def updateStorage():
     global cookies
 
@@ -430,6 +442,76 @@ def makeRequest(method: str, url: str, header: 'dict[str,str]', body: str):
         print('Request completed with code',str(templates['response.code']))
 
 
+def parseBodyRest(script: list[str]) -> tuple[list[str], dict[str,str], str]:
+    header = dict(defaultHeader.items())
+    # headers here need to have _some_ value (unless comment)
+    while re.match(r'^\s*#|^[\w-]+:\s*[^\s]', script[0]):
+        hdr = script.pop(0)
+        line = line + 1
+        if hdr.lstrip().startswith('#'):
+            continue
+        key = hdr.split(':',1)[0]
+        value = hdr[len(key)+1:].strip()
+        key = resolve(key)
+        value = resolve(value)
+        header[key.strip()] = value
+        if verbose:
+            print('Push header',key,':',value)
+
+    # collect body from one delimiter to the other
+    bodyDelimiter = script.pop(0)
+    line = line + 1
+    if verbose:
+        print('Body delimiter',bodyDelimiter.strip())
+    try:
+        endIndex = script.index(bodyDelimiter)
+        body = ''.join((resolve(line) for line in script[:endIndex]))
+        line = line + endIndex
+        script = script[endIndex+1:]
+        if verbose:
+            print('Collected',endIndex,'lines from script for body')
+    except ValueError:
+        die('Request body is never closed')
+
+    return script, header, body
+
+
+def parseBodyElastic(script: list[str]) -> tuple[list[str], dict[str,str], str]:
+    # body needs to be a json document
+    line1trimmed = script[0].strip()
+    if not line1trimmed.startswith('{') and not line1trimmed.startswith('['):
+        return script, dict(), ''
+
+    def jsonComplete(v: str) -> bool:
+        try:
+            json.loads(v)
+            return True
+        except:
+            return False
+
+    terminal = '}' if line1trimmed.startswith('{') else ']'
+    lines = 0
+    body = ''
+    while True:
+        body = body + script.pop(0)
+        lines = lines + 1
+        if body.rstrip().endswith(terminal) and jsonComplete(body):
+            break
+        elif script.count == 0:
+            die('Request body is never closed properly')
+    if lines and verbose:
+            print('Collected',lines,'lines from script for body')
+
+    return script, dict(), body
+
+
+def parseBody(script: list[str]) -> tuple[list[str], dict[str,str], str]:
+    if requestParseMode == 'rest':
+        return parseBodyRest(script)
+    else:
+        return parseBodyElastic(script)
+
+
 def main(script: 'list[str]') -> int:
     global line
 
@@ -459,6 +541,8 @@ def main(script: 'list[str]') -> int:
             filtered(cmdRead, rest)
         elif word1 == 'write':
             filtered(cmdWrite, rest)
+        elif word1 == 'mode':
+            filtered(cmdMode, rest)
         elif word1 == 'cookies':
             filtered(cmdCookies, rest)
         elif word1 == 'storage':
@@ -471,36 +555,7 @@ def main(script: 'list[str]') -> int:
         elif word1 in ('GET','HEAD','POST','PUT','DELETE','PATCH'):
             if verbose:
                 print('Start',word1,'Request to',rest.rstrip())
-
-            header = dict(defaultHeader.items())
-            # headers here need to have _some_ value (unless comment)
-            while re.match(r'^\s*#|^[\w-]+:\s*[^\s]', script[0]):
-                hdr = script.pop(0)
-                line = line + 1
-                if hdr.lstrip().startswith('#'):
-                    continue
-                key = hdr.split(':',1)[0]
-                value = hdr[len(key)+1:].strip()
-                key = resolve(key)
-                value = resolve(value)
-                header[key.strip()] = value
-                if verbose:
-                    print('Push header',key,':',value)
-
-            # collect body from one delimiter to the other
-            bodyDelimiter = script.pop(0)
-            line = line + 1
-            if verbose:
-                print('Body delimiter',bodyDelimiter.strip())
-            try:
-                endIndex = script.index(bodyDelimiter)
-                body = ''.join((resolve(line) for line in script[:endIndex]))
-                line = line + endIndex
-                script = script[endIndex+1:]
-                if verbose:
-                    print('Collected',endIndex,'lines from script for body')
-            except ValueError:
-                die('Request body is never closed')
+            [script, header, body] = parseBody(script)
 
             filtered(makeRequest, (word1, rest.rstrip(), header, body))
 

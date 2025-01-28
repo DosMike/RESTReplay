@@ -56,7 +56,9 @@ Authorization: {{ env.API_KEY }}
 
 ### Requests
 
-Requests are written very similar to raw HTTP requests with the following format:
+#### .http / .rest mode
+
+Requests by default are written very similar to raw HTTP requests with the following format:
 
 ```
 METHOD URI
@@ -73,6 +75,19 @@ The request is followed by 0 or more lines of headers, replacing over any set de
 The content body, in contrast to a raw HTTP request is delimited by any line after the headers that is not following `[\w-]+:\s*.+`.
 The same delimiter is required after the request body, so Content-Length can be properly calculated, if templated or read from file.
 If you do not have a body or know it does not contain empty lines, you can use those, although not recommended.
+
+#### elasic mode
+
+Alternatively you can switch to elastic mode, allowing you to copy paste elastic queries directly from the dev console.
+
+```
+METHOD URL
+BODY
+```
+
+As with http / rest mode, you probably want to specify a baseUrl to request against. Elestic mode however does not allow you to set per request headers. You can use defaultHeader instead.
+
+The optional body in elastic mode is not explicitly delimited, but has to be a json object or array instead. The request body is complete once the smallest possible amount of lines connected parse successfully, so do not add extra characters on the closing line!
 
 ### Meta Commands
 
@@ -101,6 +116,10 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   > Read the given file, absolute or relative to the REST Replay file, and write it's content into the template key.
 * write PATH: \<VALUE>
   > At the specified path, absolute or relative to the REST Replay file, write the specified value.
+* mode elastic/http/rest
+  > In rest/http mode you have to write full HTTP requests with headers.
+  > In elastic mode headers are not parsed and the optional body delimits as soon as a json object or array beginning in the next line is complete. Use defaultHeader if you need them.
+  > *Default:* rest
 * cookies on/off
   > Turn cookie parsing on/off
   > *Default:* off
