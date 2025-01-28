@@ -392,20 +392,24 @@ def cmdSslContext(args: str):
 
     kvStore: 'dict[str,str]' = dict()
     knownKeys = ('cafile', 'capath', 'protocol', 'mode', 'verify', 'options')
-    regexElement = r'"(?:\\[\\"rnt]|[^\\])+"'
-    regexKeyValue = f'(?:\\w+)\\s*:\\s*{regexElement}'
+    regexValue = r'"(?:\\[\\"rnt]|[^\\])+?"'
+    regexKeyValue = f'\\w+\\s*:\\s*{regexValue}'
     regexConfig = f'^{regexKeyValue}(?:\\s*,\\s*{regexKeyValue})*$'
     if not re.match(regexConfig, args):
         die('Invalid key value syntax for sslContext arguments')
     # capture one key value and eat the possible delimiter
-    regexKeyValue = re.compile(f'^(\\w+)\\s*:\\s*({regexElement})(?:\\s*,\\s*)?')
+    regexKeyValue = re.compile(f'^(\\w+)\\s*:\\s*({regexValue})(?:\\s*,\\s*)?')
     while args:
         match = regexKeyValue.match(args)
-        [key, value] = [json.loads(grp) if grp and grp.startswith('"') else grp for grp in match[1:]]
+        key = match[1].lower()
+        try:
+            value = json.loads(match[2])
+        except Exception as e:
+            die(f'Invalid value for key {key} : {match[2]}')
         args = args[len(match[0]):]
-        if not key.lower() in knownKeys:
+        if not key in knownKeys:
             die(f'Unknown sslContext parameter: {key}')
-        kvStore[key.lower()] = value
+        kvStore[key] = value
 
     cafile = kvStore.get('cafile', None)
     capath = kvStore.get('capath', None)
@@ -419,13 +423,16 @@ def cmdSslContext(args: str):
     if 'protocol' in kvStore:
         rawProtocol = kvStore['protocol'].lower()
         if rawProtocol == 'tlsv1.0':
-            sslContext.protocol = ssl.PROTOCOL_TLSv1
+            sslContext.minimum_version = ssl.TLSVersion.TLSv1
+            sslContext.maximum_version = ssl.TLSVersion.TLSv1
         elif rawProtocol == 'tlsv1.1':
-            sslContext.protocol = ssl.PROTOCOL_TLSv1_1
+            sslContext.minimum_version = ssl.TLSVersion.TLSv1_1
+            sslContext.maximum_version = ssl.TLSVersion.TLSv1_1
         elif rawProtocol == 'tlsv1.2':
-            sslContext.protocol = ssl.PROTOCOL_TLSv1_2
+            sslContext.minimum_version = ssl.TLSVersion.TLSv1_2
+            sslContext.maximum_version = ssl.TLSVersion.TLSv1_2
         elif rawProtocol == 'tls':
-            sslContext.protocol = ssl.PROTOCOL_TLS_CLIENT
+            pass  # default for PROTOCOL_TLS
         else:
             die('Unsupported protocol version (expected one of: TLS, TLSv1.0, TLSv1.1, TLSv1.2)')
 
@@ -464,7 +471,7 @@ def cmdSslContext(args: str):
         sslContext.verify_flags = verifyFlags
 
     if 'options' in kvStore:
-        rawOptions = [x.strip().lower() for x in kvStore.get['options'].split(',')]
+        rawOptions = [x.strip().lower() for x in kvStore['options'].split(',')]
         options = ssl.OP_ALL | ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
         for option in rawOptions:
             if option == 'no_renegotiation':
@@ -484,7 +491,7 @@ def cmdSslContext(args: str):
         sslContext.options = options
 
     if verbose:
-        print(f'Set mode to {requestParseMode}')
+        print(f'Set up SSL Context')
 
 
 def cmdEval(args: str):
