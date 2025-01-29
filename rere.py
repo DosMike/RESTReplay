@@ -260,11 +260,13 @@ def cmdExit(args: str):
 
 def cmdDefaultHeader(args: str):
     global defaultHeader
+
     match = re.match(r'^([\w-]+):\s*(.*)$', args)
     if not match:
         die('Invalid format for defaultHeader')
     key = resolve(match[1])
     value = resolve(match[2]) if match[2] else ''
+
     if value:
         defaultHeader[key] = value
         if verbose:
@@ -279,12 +281,14 @@ def cmdDefaultHeader(args: str):
 
 def cmdSet(args: str):
     global templates
+
     key = args.split(':',1)[0]
     value = args[len(key)+1:]
     key = resolve(key.strip())
     value = resolve(value.strip())
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in set')
+
     if value:
         templates[key] = value
         if verbose:
@@ -295,8 +299,75 @@ def cmdSet(args: str):
             print(f'Cleared template "{key}"')
 
 
+def cmdParseTemplate(args: str):
+    global templates
+
+    key = resolve(args.strip())
+    if not re.match(r'^[\w-]+$', key):
+        die(f'Invalid format of key "{key}" in parseTemplate')
+    value = resolve(key.strip())
+
+    if value:
+        templates[key] = value
+        if verbose:
+            print(f'Set template "{key}" : "{value}"')
+    else:
+        templates.pop(key)
+        if verbose:
+            print(f'Cleared template "{key}"')
+
+
+def cmdReplace(args: str):
+    global templates
+
+    key = args.split(':',1)[0]
+    value = args[len(key)+1:]
+    key = resolve(key.strip())
+    value = resolve(value.strip())
+    if not re.match(r'^[\w-]+$', key):
+        die(f'Invalid format of key "{key}" in replace')
+    if not key in templates:
+        die(f'Invalid call to replace, key "{key}" is unset')
+
+    if len(value) < 4 or value[0] != 's':
+        die('Invalid format for sed expression')
+
+    delim = value[1]
+    idx2 = value.find(delim, 2)
+    idx3 = value.find(delim, idx2+1)
+    if idx2 == -1 or idx3 == -1:
+        die('Invalid format for sed expression')
+    pattern = value[2,idx2]
+    replacement = value[idx2+1,idx3]
+    flags = 0
+    g = False
+    for c in value[idx3+1:].lower():
+        if c == 'g':
+            g = True
+        elif c == 'i':
+            flags = flags | re.IGNORECASE
+        elif c == 's':
+            flags = flags | re.DOTALL
+        elif c == 'm':
+            flags = flags | re.MULTILINE
+        else:
+            die(f'Unknown regex flag {c} (Expected zero or more of: G, I, S, M)')
+
+    value = re.sub(pattern, replacement, templates[key], 0 if g else 1, flags)
+
+    if value:
+        templates[key] = value
+        if verbose:
+            print(f'SED set template "{key}" : "{value}"')
+    else:
+        templates.pop(key)
+        if verbose:
+            print(f'SED cleared template "{key}"')
+
+
 def cmdRead(args: str):
     global templates
+
     file = args.split(':',1)[0]
     key = args[len(file)+1:]
     key = resolve(key.strip())
@@ -307,12 +378,12 @@ def cmdRead(args: str):
         die(f'Can not read form file "{file}"')
     with open(file) as f:
         templates[key] = f.read()
+
     if verbose:
         print(f'Read template "{key}" from file {file}')
 
 
 def cmdWrite(args: str):
-    global templates
     file = args.split(':',1)[0]
     value = args[len(file)+1:]
     value = resolve(value.strip())
@@ -320,8 +391,13 @@ def cmdWrite(args: str):
     with open(file, 'w') as f:
         f.write(value)
         f.flush()
+
     if verbose:
         print(f'Wrote value to file {file}')
+
+
+def cmdPrint(args: str):
+    print(resolve(args.strip()))
 
 
 def cmdMode(args: str):
@@ -403,7 +479,7 @@ def cmdSslContext(args: str):
         match = regexKeyValue.match(args)
         key = match[1].lower()
         try:
-            value = json.loads(match[2])
+            value = resolve(json.loads(match[2]))
         except Exception as e:
             die(f'Invalid value for key {key} : {match[2]}')
         args = args[len(match[0]):]
@@ -656,13 +732,15 @@ def main(script: 'list[str]') -> int:
         elif word1 == 'set':
             filtered(cmdSet, rest)
         elif word1 == 'parseTemplates':
-            pass #filtered(cmdParseTemplate, rest)
+            filtered(cmdParseTemplate, rest)
         elif word1 == 'replace':
-            pass #filtered(cmdReplace, rest)
+            filtered(cmdReplace, rest)
         elif word1 == 'read':
             filtered(cmdRead, rest)
         elif word1 == 'write':
             filtered(cmdWrite, rest)
+        elif word1 == 'print':
+            filtered(cmdPrint, rest)
         elif word1 == 'mode':
             filtered(cmdMode, rest)
         elif word1 == 'cookies':

@@ -119,10 +119,23 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   > Set the default value for a given header. If value is empty, the default is unset.
 * set \<KEY>: \<VALUE>
   > Set values outside any namespace to the given value. Key has to consist of `[\w-]` characters.
+* parseTemplates \<VALUE>
+  > Force parsing templates in value. If you have a literal value of "{{ foo }}" and foo is "bar", `parseTemplates result: {{ value }}` would set result to "bar".
+* replace \<VALUE>: \<SED_STRING>
+  > Use a sed s/// replacement expression on a template. The replacement is in-place.
+  > The sed string has to start with a lowercase s, followed by a delimiter character picked by you. Immediately following the delimiter is the regular expression, and, after another separator, the replacement string. After the terminating delimiter, you can add the following flag characters:
+  > * g - global, replace all occurances
+  > * i - insensitive, ignore case
+  > * m - multiline, ^.*$ matches the whole string instead of a line
+  > * s - dotall, makes dot match line breaks
+  >
+  > Example: `replace key: s/search/replace/gi`
 * read PATH: \<KEY>
   > Read the given file, absolute or relative to the REST Replay file, and write it's content into the template key.
 * write PATH: \<VALUE>
   > At the specified path, absolute or relative to the REST Replay file, write the specified value.
+* print \<VALUE>
+  > Write some value to standard out / terminal
 * mode elastic/http/rest
   > In rest/http mode you have to write full HTTP requests with headers.
   > In elastic mode headers are not parsed and the optional body delimits as soon as a json object or array beginning in the next line is complete. Use defaultHeader if you need them.
@@ -141,7 +154,7 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   >
   > *Default:* unset, cookies are not stored on disc.
 * sslContext OPTIONS/default
-  > OPTIONS is a set of comma separated list of `key: value` pairs, with quoted values. These options map closely to the python [SSLContext](https://docs.python.org/3/library/ssl.html#ssl-contexts) object. All supported keys are optional. An abbreviated summary is provided for convenience. Check the linked python docs for more information. _**If unsure, leave unset**_. If you want to revert to default values, use `sslContext default` instead.
+  > OPTIONS is a set of comma separated list of `key: value` pairs, with quoted values. Values can contain templates. These options map closely to the python [SSLContext](https://docs.python.org/3/library/ssl.html#ssl-contexts) object. All supported keys are optional. An abbreviated summary is provided for convenience. Check the linked python docs for more information. _**If unsure, leave unset**_. If you want to revert to default values, use `sslContext default` instead.
   > * cafile : path to a file of concatenated CA certificates in PEM format
   > * capath : path to a directory containing several CA certificates in PEM format
   > * mode :
