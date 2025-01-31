@@ -467,7 +467,7 @@ def cmdSslContext(args: str):
         return
 
     kvStore: 'dict[str,str]' = dict()
-    knownKeys = ('cafile', 'capath', 'protocol', 'mode', 'verify', 'options')
+    knownKeys = ('cafile', 'capath', 'certfile', 'keyfile', 'password', 'protocol', 'mode', 'verify', 'options')
     regexValue = r'"(?:\\[\\"rnt]|[^\\])+?"'
     regexKeyValue = f'\\w+\\s*:\\s*{regexValue}'
     regexConfig = f'^{regexKeyValue}(?:\\s*,\\s*{regexKeyValue})*$'
@@ -495,6 +495,16 @@ def cmdSslContext(args: str):
         if verbose:
             traceback.print_exc()
         die(f'Failed to create sslContext')
+
+    certfile = kvStore.get('certfile', None)
+    keyfile = kvStore.get('keyfile', None)
+    password = kvStore.get('password', None)
+    if certfile:
+        if password != None:
+            passfun = lambda : templates.get(password) if password in templates else die('Template for SSL Certificat KeyFile Password was not set')
+        else:
+            passfun = None
+        sslContext.load_cert_chain(certfile, keyfile, passfun)
 
     if 'protocol' in kvStore:
         rawProtocol = kvStore['protocol'].lower()

@@ -157,6 +157,9 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   > OPTIONS is a set of comma separated list of `key: value` pairs, with quoted values. Values can contain templates. These options map closely to the python [SSLContext](https://docs.python.org/3/library/ssl.html#ssl-contexts) object. All supported keys are optional. An abbreviated summary is provided for convenience. Check the linked python docs for more information. _**If unsure, leave unset**_. If you want to revert to default values, use `sslContext default` instead.
   > * cafile : path to a file of concatenated CA certificates in PEM format
   > * capath : path to a directory containing several CA certificates in PEM format
+  > * certfile : path to a certificate for a cert chain
+  > * keyfile : optional path to a separate private key file for the cert chain
+  > * password : optional name of a template that stores the password for the private key. Will open a prompt if omited but keyfile is encrypted.
   > * mode :
   >   * NONE : just about any cert is accepted. Validation errors, such as untrusted or expired cert, are ignored and do not abort the TLS/SSL handshake
   >   * REQUIRED (default) : certificates are required from the other side of the socket connection; an SSLError will be raised if no certificate is provided, or if its validation fails. As PROTOCOL_TLS_CLIENT is set by default, this will validate hostnames.
