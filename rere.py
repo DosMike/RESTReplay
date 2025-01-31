@@ -32,12 +32,17 @@ except:
         def evalJs(code):
             die('eval requires js2py or pythonmonkey')
 
+version = '1.1.0'
 
 verbose = False
 dryRun = False
 templates = dict([(f'env.{k}',v) for k,v in os.environ.items()])
 baseUrl: ParsedURL = None
-defaultHeader = dict()
+defaultHeader = {
+    'User-Agent': f'RESTReplay/{version} (DosMike/Python3)',
+    'Content-Type': 'application/json; charset=utf-8',
+    'Accept': 'application/json, */*;q=0.8',
+}
 delimiter = ['{{','}}']
 timeout = 3
 requestParseMode = 'rest'
@@ -774,7 +779,6 @@ def main(script: 'list[str]') -> int:
         else:
             die(f'Unknown command or request method "{word1}"')
 
-version = '1.1.0'
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
              prog='REST Replay',
