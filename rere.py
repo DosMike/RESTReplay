@@ -298,7 +298,7 @@ def cmdSet(args: str):
         templates[key] = value
         if verbose:
             print(f'Set template "{key}" : "{value}"')
-    else:
+    elif key in templates:
         templates.pop(key)
         if verbose:
             print(f'Cleared template "{key}"')
@@ -307,16 +307,19 @@ def cmdSet(args: str):
 def cmdParseTemplate(args: str):
     global templates
 
-    key = resolve(args.strip())
+    key = args.strip()
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in parseTemplate')
-    value = resolve(key.strip())
+    if key in templates:
+        value = resolve(templates[key])
+    else:
+        value = ''
 
     if value:
         templates[key] = value
         if verbose:
             print(f'Set template "{key}" : "{value}"')
-    else:
+    elif key in templates:
         templates.pop(key)
         if verbose:
             print(f'Cleared template "{key}"')
@@ -342,8 +345,8 @@ def cmdReplace(args: str):
     idx3 = value.find(delim, idx2+1)
     if idx2 == -1 or idx3 == -1:
         die('Invalid format for sed expression')
-    pattern = value[2,idx2]
-    replacement = value[idx2+1,idx3]
+    pattern = value[2:idx2]
+    replacement = value[idx2+1:idx3]
     flags = 0
     g = False
     for c in value[idx3+1:].lower():
@@ -364,7 +367,7 @@ def cmdReplace(args: str):
         templates[key] = value
         if verbose:
             print(f'SED set template "{key}" : "{value}"')
-    else:
+    elif key in templates:
         templates.pop(key)
         if verbose:
             print(f'SED cleared template "{key}"')
@@ -600,7 +603,7 @@ def cmdEval(args: str):
         templates[key] = result
         if verbose:
             print('Set',key,'to',result,'<-',value)
-    else:
+    elif key in templates:
         templates.pop(key)
         if verbose:
             print('Cleared',key,'from <-',value)

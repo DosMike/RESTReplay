@@ -119,8 +119,8 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   > Set the default value for a given header. If value is empty, the default is unset.
 * set \<KEY>: \<VALUE>
   > Set values outside any namespace to the given value. Key has to consist of `[\w-]` characters.
-* parseTemplates \<VALUE>
-  > Force parsing templates in value. If you have a literal value of "{{ foo }}" and foo is "bar", `parseTemplates result: {{ value }}` would set result to "bar".
+* parseTemplates \<KEY>
+  > Force parsing templates within the template. If you have a literal value of "{{ foo }}" and foo is "bar", `parseTemplates value` would set value to "bar".
 * replace \<VALUE>: \<SED_STRING>
   > Use a sed s/// replacement expression on a template. The replacement is in-place.
   > The sed string has to start with a lowercase s, followed by a delimiter character picked by you. Immediately following the delimiter is the regular expression, and, after another separator, the replacement string. After the terminating delimiter, you can add the following flag characters:
