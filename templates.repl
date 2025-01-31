@@ -1,0 +1,39 @@
+set test1: Failed
+replace test1: s-Failed-Passed-
+print {{test1}}
+
+set test2: Failed
+set value: banana
+replace value: s/^\w+$/*/gi
+print {{value}}
+if value == "*"
+set test2: Passed
+
+set test3: Failed
+set pattern: [a-z]
+set replacement: *
+set value: banana
+replace value: s/{{pattern}}/{{replacement}}/gi
+print {{value}}
+if value == "******"
+set test3: Passed
+
+set test4: Failed
+set value: banana
+replace value: s/a/*/
+print {{value}}
+if value == "b*nana"
+set test4: Passed
+
+set test5: Failed
+set foo: bar
+set baz: x(( foo ))x
+delimiter (( token ))
+parseTemplates baz
+print ((baz))
+if baz == "xbarx"
+set test5: Passed
+
+set result: ((test1)) ((test2)) ((test3)) ((test4)) ((test5))
+if "Failed" in result
+exit 1

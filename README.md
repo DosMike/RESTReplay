@@ -119,10 +119,23 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   > Set the default value for a given header. If value is empty, the default is unset.
 * set \<KEY>: \<VALUE>
   > Set values outside any namespace to the given value. Key has to consist of `[\w-]` characters.
+* parseTemplates \<KEY>
+  > Force parsing templates within the template. If you have a literal value of "{{ foo }}" and foo is "bar", `parseTemplates value` would set value to "bar".
+* replace \<VALUE>: \<SED_STRING>
+  > Use a sed s/// replacement expression on a template. The replacement is in-place.
+  > The sed string has to start with a lowercase s, followed by a delimiter character picked by you. Immediately following the delimiter is the regular expression, and, after another separator, the replacement string. After the terminating delimiter, you can add the following flag characters:
+  > * g - global, replace all occurances
+  > * i - insensitive, ignore case
+  > * m - multiline, ^.*$ matches the whole string instead of a line
+  > * s - dotall, makes dot match line breaks
+  >
+  > Example: `replace key: s/search/replace/gi`
 * read PATH: \<KEY>
   > Read the given file, absolute or relative to the REST Replay file, and write it's content into the template key.
 * write PATH: \<VALUE>
   > At the specified path, absolute or relative to the REST Replay file, write the specified value.
+* print \<VALUE>
+  > Write some value to standard out / terminal
 * mode elastic/http/rest
   > In rest/http mode you have to write full HTTP requests with headers.
   > In elastic mode headers are not parsed and the optional body delimits as soon as a json object or array beginning in the next line is complete. Use defaultHeader if you need them.
@@ -141,9 +154,12 @@ Meta commands are case sensitive. Before execution, every command argument in \<
   >
   > *Default:* unset, cookies are not stored on disc.
 * sslContext OPTIONS/default
-  > OPTIONS is a set of comma separated list of `key: value` pairs, with quoted values. These options map closely to the python [SSLContext](https://docs.python.org/3/library/ssl.html#ssl-contexts) object. All supported keys are optional. An abbreviated summary is provided for convenience. Check the linked python docs for more information. _**If unsure, leave unset**_. If you want to revert to default values, use `sslContext default` instead.
+  > OPTIONS is a set of comma separated list of `key: value` pairs, with quoted values. Values can contain templates. These options map closely to the python [SSLContext](https://docs.python.org/3/library/ssl.html#ssl-contexts) object. All supported keys are optional. An abbreviated summary is provided for convenience. Check the linked python docs for more information. _**If unsure, leave unset**_. If you want to revert to default values, use `sslContext default` instead.
   > * cafile : path to a file of concatenated CA certificates in PEM format
   > * capath : path to a directory containing several CA certificates in PEM format
+  > * certfile : path to a certificate for a cert chain
+  > * keyfile : optional path to a separate private key file for the cert chain
+  > * password : optional name of a template that stores the password for the private key. Will open a prompt if omited but keyfile is encrypted.
   > * mode :
   >   * NONE : just about any cert is accepted. Validation errors, such as untrusted or expired cert, are ignored and do not abort the TLS/SSL handshake
   >   * REQUIRED (default) : certificates are required from the other side of the socket connection; an SSLError will be raised if no certificate is provided, or if its validation fails. As PROTOCOL_TLS_CLIENT is set by default, this will validate hostnames.

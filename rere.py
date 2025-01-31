@@ -32,12 +32,17 @@ except:
         def evalJs(code):
             die('eval requires js2py or pythonmonkey')
 
+version = '1.1.0'
 
 verbose = False
 dryRun = False
 templates = dict([(f'env.{k}',v) for k,v in os.environ.items()])
 baseUrl: ParsedURL = None
-defaultHeader = dict()
+defaultHeader = {
+    'User-Agent': f'RESTReplay/{version} (DosMike/Python3)',
+    'Content-Type': 'application/json; charset=utf-8',
+    'Accept': 'application/json, */*;q=0.8',
+}
 delimiter = ['{{','}}']
 timeout = 3
 requestParseMode = 'rest'
@@ -260,11 +265,13 @@ def cmdExit(args: str):
 
 def cmdDefaultHeader(args: str):
     global defaultHeader
+
     match = re.match(r'^([\w-]+):\s*(.*)$', args)
     if not match:
         die('Invalid format for defaultHeader')
     key = resolve(match[1])
     value = resolve(match[2]) if match[2] else ''
+
     if value:
         defaultHeader[key] = value
         if verbose:
@@ -279,24 +286,96 @@ def cmdDefaultHeader(args: str):
 
 def cmdSet(args: str):
     global templates
+
     key = args.split(':',1)[0]
     value = args[len(key)+1:]
     key = resolve(key.strip())
     value = resolve(value.strip())
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in set')
+
     if value:
         templates[key] = value
         if verbose:
             print(f'Set template "{key}" : "{value}"')
-    else:
+    elif key in templates:
         templates.pop(key)
         if verbose:
             print(f'Cleared template "{key}"')
 
 
+def cmdParseTemplate(args: str):
+    global templates
+
+    key = args.strip()
+    if not re.match(r'^[\w-]+$', key):
+        die(f'Invalid format of key "{key}" in parseTemplate')
+    if key in templates:
+        value = resolve(templates[key])
+    else:
+        value = ''
+
+    if value:
+        templates[key] = value
+        if verbose:
+            print(f'Set template "{key}" : "{value}"')
+    elif key in templates:
+        templates.pop(key)
+        if verbose:
+            print(f'Cleared template "{key}"')
+
+
+def cmdReplace(args: str):
+    global templates
+
+    key = args.split(':',1)[0]
+    value = args[len(key)+1:]
+    key = resolve(key.strip())
+    value = resolve(value.strip())
+    if not re.match(r'^[\w-]+$', key):
+        die(f'Invalid format of key "{key}" in replace')
+    if not key in templates:
+        die(f'Invalid call to replace, key "{key}" is unset')
+
+    if len(value) < 4 or value[0] != 's':
+        die('Invalid format for sed expression')
+
+    delim = value[1]
+    idx2 = value.find(delim, 2)
+    idx3 = value.find(delim, idx2+1)
+    if idx2 == -1 or idx3 == -1:
+        die('Invalid format for sed expression')
+    pattern = value[2:idx2]
+    replacement = value[idx2+1:idx3]
+    flags = 0
+    g = False
+    for c in value[idx3+1:].lower():
+        if c == 'g':
+            g = True
+        elif c == 'i':
+            flags = flags | re.IGNORECASE
+        elif c == 's':
+            flags = flags | re.DOTALL
+        elif c == 'm':
+            flags = flags | re.MULTILINE
+        else:
+            die(f'Unknown regex flag {c} (Expected zero or more of: G, I, S, M)')
+
+    value = re.sub(pattern, replacement, templates[key], 0 if g else 1, flags)
+
+    if value:
+        templates[key] = value
+        if verbose:
+            print(f'SED set template "{key}" : "{value}"')
+    elif key in templates:
+        templates.pop(key)
+        if verbose:
+            print(f'SED cleared template "{key}"')
+
+
 def cmdRead(args: str):
     global templates
+
     file = args.split(':',1)[0]
     key = args[len(file)+1:]
     key = resolve(key.strip())
@@ -307,12 +386,12 @@ def cmdRead(args: str):
         die(f'Can not read form file "{file}"')
     with open(file) as f:
         templates[key] = f.read()
+
     if verbose:
         print(f'Read template "{key}" from file {file}')
 
 
 def cmdWrite(args: str):
-    global templates
     file = args.split(':',1)[0]
     value = args[len(file)+1:]
     value = resolve(value.strip())
@@ -320,8 +399,13 @@ def cmdWrite(args: str):
     with open(file, 'w') as f:
         f.write(value)
         f.flush()
+
     if verbose:
         print(f'Wrote value to file {file}')
+
+
+def cmdPrint(args: str):
+    print(resolve(args.strip()))
 
 
 def cmdMode(args: str):
@@ -391,21 +475,25 @@ def cmdSslContext(args: str):
         return
 
     kvStore: 'dict[str,str]' = dict()
-    knownKeys = ('cafile', 'capath', 'protocol', 'mode', 'verify', 'options')
-    regexElement = r'"(?:\\[\\"rnt]|[^\\])+"'
-    regexKeyValue = f'(?:\\w+)\\s*:\\s*{regexElement}'
+    knownKeys = ('cafile', 'capath', 'certfile', 'keyfile', 'password', 'protocol', 'mode', 'verify', 'options')
+    regexValue = r'"(?:\\[\\"rnt]|[^\\])+?"'
+    regexKeyValue = f'\\w+\\s*:\\s*{regexValue}'
     regexConfig = f'^{regexKeyValue}(?:\\s*,\\s*{regexKeyValue})*$'
     if not re.match(regexConfig, args):
         die('Invalid key value syntax for sslContext arguments')
     # capture one key value and eat the possible delimiter
-    regexKeyValue = re.compile(f'^(\\w+)\\s*:\\s*({regexElement})(?:\\s*,\\s*)?')
+    regexKeyValue = re.compile(f'^(\\w+)\\s*:\\s*({regexValue})(?:\\s*,\\s*)?')
     while args:
         match = regexKeyValue.match(args)
-        [key, value] = [json.loads(grp) if grp and grp.startswith('"') else grp for grp in match[1:]]
+        key = match[1].lower()
+        try:
+            value = resolve(json.loads(match[2]))
+        except Exception as e:
+            die(f'Invalid value for key {key} : {match[2]}')
         args = args[len(match[0]):]
-        if not key.lower() in knownKeys:
+        if not key in knownKeys:
             die(f'Unknown sslContext parameter: {key}')
-        kvStore[key.lower()] = value
+        kvStore[key] = value
 
     cafile = kvStore.get('cafile', None)
     capath = kvStore.get('capath', None)
@@ -416,16 +504,29 @@ def cmdSslContext(args: str):
             traceback.print_exc()
         die(f'Failed to create sslContext')
 
+    certfile = kvStore.get('certfile', None)
+    keyfile = kvStore.get('keyfile', None)
+    password = kvStore.get('password', None)
+    if certfile:
+        if password != None:
+            passfun = lambda : templates.get(password) if password in templates else die('Template for SSL Certificat KeyFile Password was not set')
+        else:
+            passfun = None
+        sslContext.load_cert_chain(certfile, keyfile, passfun)
+
     if 'protocol' in kvStore:
         rawProtocol = kvStore['protocol'].lower()
         if rawProtocol == 'tlsv1.0':
-            sslContext.protocol = ssl.PROTOCOL_TLSv1
+            sslContext.minimum_version = ssl.TLSVersion.TLSv1
+            sslContext.maximum_version = ssl.TLSVersion.TLSv1
         elif rawProtocol == 'tlsv1.1':
-            sslContext.protocol = ssl.PROTOCOL_TLSv1_1
+            sslContext.minimum_version = ssl.TLSVersion.TLSv1_1
+            sslContext.maximum_version = ssl.TLSVersion.TLSv1_1
         elif rawProtocol == 'tlsv1.2':
-            sslContext.protocol = ssl.PROTOCOL_TLSv1_2
+            sslContext.minimum_version = ssl.TLSVersion.TLSv1_2
+            sslContext.maximum_version = ssl.TLSVersion.TLSv1_2
         elif rawProtocol == 'tls':
-            sslContext.protocol = ssl.PROTOCOL_TLS_CLIENT
+            pass  # default for PROTOCOL_TLS
         else:
             die('Unsupported protocol version (expected one of: TLS, TLSv1.0, TLSv1.1, TLSv1.2)')
 
@@ -464,7 +565,7 @@ def cmdSslContext(args: str):
         sslContext.verify_flags = verifyFlags
 
     if 'options' in kvStore:
-        rawOptions = [x.strip().lower() for x in kvStore.get['options'].split(',')]
+        rawOptions = [x.strip().lower() for x in kvStore['options'].split(',')]
         options = ssl.OP_ALL | ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
         for option in rawOptions:
             if option == 'no_renegotiation':
@@ -484,7 +585,7 @@ def cmdSslContext(args: str):
         sslContext.options = options
 
     if verbose:
-        print(f'Set mode to {requestParseMode}')
+        print(f'Set up SSL Context')
 
 
 def cmdEval(args: str):
@@ -502,7 +603,7 @@ def cmdEval(args: str):
         templates[key] = result
         if verbose:
             print('Set',key,'to',result,'<-',value)
-    else:
+    elif key in templates:
         templates.pop(key)
         if verbose:
             print('Cleared',key,'from <-',value)
@@ -648,10 +749,16 @@ def main(script: 'list[str]') -> int:
             filtered(cmdDefaultHeader, rest)
         elif word1 == 'set':
             filtered(cmdSet, rest)
+        elif word1 == 'parseTemplates':
+            filtered(cmdParseTemplate, rest)
+        elif word1 == 'replace':
+            filtered(cmdReplace, rest)
         elif word1 == 'read':
             filtered(cmdRead, rest)
         elif word1 == 'write':
             filtered(cmdWrite, rest)
+        elif word1 == 'print':
+            filtered(cmdPrint, rest)
         elif word1 == 'mode':
             filtered(cmdMode, rest)
         elif word1 == 'cookies':
@@ -675,7 +782,6 @@ def main(script: 'list[str]') -> int:
         else:
             die(f'Unknown command or request method "{word1}"')
 
-version = '1.1.0'
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
              prog='REST Replay',
