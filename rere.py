@@ -537,8 +537,8 @@ def cmdSslContext(args: str):
         elif rawVerifyMode == 'required':
             sslContext.verify_mode = ssl.CERT_REQUIRED
         elif rawVerifyMode == 'unchecked':
-            sslContext.verify_mode = ssl.CERT_REQUIRED
             sslContext.check_hostname = False
+            sslContext.verify_mode = ssl.CERT_REQUIRED
         else:
             die('Unsupported mode (expected one of: NONE, REQUIRED)')
 
