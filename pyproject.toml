@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "restreplay"
+version = "1.2.0"
+authors = [
+  { name="DosMike" },
+]
+description = "Replay REST Requests"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Private :: Do Not Upload",
+]
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/DosMike/RESTReplay"
+Issues = "https://github.com/DosMike/RESTReplay/issues"

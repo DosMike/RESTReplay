@@ -1,3 +1,19 @@
+Metadata-Version: 2.4
+Name: restreplay
+Version: 1.2.0
+Summary: Replay REST Requests
+Author: DosMike
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/pypa/sampleproject
+Project-URL: Issues, https://github.com/pypa/sampleproject/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Classifier: Private :: Do Not Upload
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
 # REST Replay
 
 Tool to replay REST request in pipelines and other places.

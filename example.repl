@@ -6,8 +6,9 @@ defaultHeader User-Agent: RESTReplay/0.1 (Indev)
 
 baseUrl https://randomuser.me/
 mode elastic
+sslContext protocol: "TLS", options: "NO_RENEGOTIATION, NO_COMPRESSION"
 GET /api/
 
-#if response.code in [ 200..299 ]
-#write response.txt: ${ response.body }
+if response.code in [ 200..299 ]
+write response.txt: ${ response.body }
 

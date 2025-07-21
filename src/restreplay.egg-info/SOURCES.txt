@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+src/restreplay/rere.py
+src/restreplay.egg-info/PKG-INFO
+src/restreplay.egg-info/SOURCES.txt
+src/restreplay.egg-info/dependency_links.txt
+src/restreplay.egg-info/top_level.txt

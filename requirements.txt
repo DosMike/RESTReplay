@@ -1,0 +1,5 @@
+# this is only for dev - during runtime, all deps are optional
+js2py==0.74
+pythonmonkey==1.2.0
+Jinja2==3.1.6
+Pystache==0.6.8

@@ -15,6 +15,11 @@ import json
 import ssl
 from typing import NoReturn
 
+import pystache.defaults
+import pystache.defaults
+import pystache.defaults
+import pystache.defaults
+
 
 try:
     # try to use js2py
@@ -30,20 +35,21 @@ except:
     except:
         # ok, just die on call
         def evalJs(code):
-            die('eval requires js2py or pythonmonkey')
+            die('Tried to run JavaScript, but no JavaScript Engine was installed. Please install the js2py or pythonmonkey package.')
 
-version = '1.1.0'
+
+version = '1.2.0'
 
 verbose = False
 dryRun = False
-templates = dict([(f'env.{k}',v) for k,v in os.environ.items()])
+
 baseUrl: ParsedURL = None
 defaultHeader = {
     'User-Agent': f'RESTReplay/{version} (DosMike/Python3)',
     'Content-Type': 'application/json; charset=utf-8',
     'Accept': 'application/json, */*;q=0.8',
 }
-delimiter = ['{{','}}']
+delimiter: list[str] = ['{{','}}']
 timeout = 3
 requestParseMode = 'rest'
 
@@ -56,25 +62,88 @@ testFilterState = True
 sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
 
 
+shared_context: dict = dict([(f'env.{k}',v) for k,v in os.environ.items()])
+
+class Templater:
+    def apply(self, templated: str) -> str:
+        templated
+        raise NotImplementedError()
+    def __getitem__(self, name: str):
+        global shared_context
+        if not re.match(r'^[\w\.-]+$', name):
+            raise ValueError(f'Invalid characters in template "{name}"')
+        if name in shared_context:
+            return shared_context[name]
+        raise ValueError(f'Template "{name}" not filled')
+    def __setitem__(self, name: str, value: str):
+        global shared_context
+        shared_context[name] = value
+    def  __delitem__(self, name: str):
+        global shared_context
+        shared_context.__delitem__(name)
+    def __iter__(self):
+        global shared_context
+        return shared_context.__iter__()
+    def update_delims(self):
+        raise NotImplementedError()
+
+class CustomTemplater(Templater):
+    def apply(self, templated: str) -> str:
+        # build escaped regex
+        begin = re.escape(delimiter[0])
+        end = re.escape(delimiter[1])
+        regex = f'{begin}\\s*(.+?)\\s*{end}'
+        return re.sub(regex, lambda x: self[x[1]], templated)
+    def update_delims(self):
+        pass
+
+from jinja2 import Environment, TemplateError
+class JinjaTemplater(Templater):
+    def __init__(self):
+        try:
+            from jinja2 import Environment, TemplateError
+        except:
+            die('Tried to use Jinja2 templating engine, but Jinja2 is not installed. Please install the jinja2 package.')
+        self.env = Environment() # type: ignore  # this dependency is loaded dynamically with cmdTemplateEngine
+        self.update_delims()
+    def apply(self, templated: str) -> str:
+        global shared_context
+        try:
+            return self.env.from_string(templated).render(shared_context)
+        except TemplateError as e:
+            die(f'Error in Jinja2 template engine: {e.__class__.__name__}: {e.message}')
+    def update_delims(self):
+        global delimiter
+        self.env.variable_start_string = delimiter[0]
+        self.env.variable_end_string = delimiter[1]
+
+import pystache
+class PystacheTemplater(Templater):
+    def __init__(self):
+        try:
+            import pystache
+        except:
+            die('Tried to use Pystache templating engine, but Pystache is not installed. Please install the pystache package.')
+        pystache.defaults.MISSING_TAGS = 'strict'  # does not seem to have any effects
+        self.update_delims()
+    def apply(self, templated: str) -> str:
+        global shared_context
+        return pystache.render(templated, shared_context)
+    def update_delims(self):
+        global delimiter
+        pystache.defaults.DELIMITERS = delimiter
+
+class DummyTemplater(Templater):
+    def apply(self, templated: str) -> str:
+        return templated
+    def update_delims(self):
+        pass
+
+templater = CustomTemplater()
+
 def die(message: str, code: int = 1) -> NoReturn:
     print(f'Line {line}:',message)
     sys.exit(code)
-
-
-def getTemplate(name: str, pos: int) -> str:
-    if not re.match(r'^[\w\.-]+$', name):
-        die(f'Invalid characters in template "{name}" (offset {pos})')
-    if name in templates:
-        return templates[name]
-    die(f'Template "{name}" not filled (offset {pos})')
-
-
-def resolve(templated: str) -> str:
-    # build escaped regex
-    begin = re.escape(delimiter[0])
-    end = re.escape(delimiter[1])
-    regex = f'{begin}\\s*(.+?)\\s*{end}'
-    return re.sub(regex, lambda x: getTemplate(x[1], x.pos), templated)
 
 
 def parseDuration(value: str) -> int:
@@ -89,6 +158,8 @@ def parseDuration(value: str) -> int:
 
 
 def evalExpr(expr: str, requireCleanReturn: bool = True) -> tuple[bool, int]:
+    global templater
+
     regexJstr = r'"(?:\\[\\"rnt]|[^"])+"'
     regexJnum = r'-?[0-9]+(?:\.[0-9]+)?'
     regexJvalue = f'{regexJstr}|{regexJnum}'
@@ -111,9 +182,9 @@ def evalExpr(expr: str, requireCleanReturn: bool = True) -> tuple[bool, int]:
             if not m:
                 die(f'Invalid expression, number or template expected at "{val}"')
 
-            if not m[0] in templates:
+            if m[0] not in templater:
                 raise ValueError(f'Invalid expression, can\'t compare unset templte {m[1]}')
-            v = templates[m[0]]
+            v = templater[m[0]]
             if re.match(r'^[0-9]+$', v):
                 v = int(v)
             elif re.match(regexJnum, v):
@@ -203,16 +274,16 @@ def filtered(callback, args: str|tuple):
     testFilterState = True  # run next command again
 
     if not s:
-        return None
+        return
     elif isinstance(args, str):
-        return callback(args)
+        callback(args)
     else:
-        return callback(*args)
+        callback(*args)
 
 
 def cmdBaseUrl(args: str):
     global baseUrl
-    baseUrl = urlparse(resolve(args))
+    baseUrl = urlparse(templater.apply(args))
     if not baseUrl.scheme or not baseUrl.netloc:
         die('Invalid value for baseUrl: requires scheme and host')
     if baseUrl.query or baseUrl.fragment:
@@ -222,7 +293,7 @@ def cmdBaseUrl(args: str):
 
 
 def cmdEnvFiles(args: str):
-    global templates
+    global templater
     paths = args.split(':')
     for path in paths:
         if not os.path.isfile(path):
@@ -235,15 +306,35 @@ def cmdEnvFiles(args: str):
                     continue
                 key = line.split('=',1)[0]
                 value = line[len(key)+1:]
-                templates[f'env.{key.strip()}'] = value
+                templater[f'env.{key.strip()}'] = value
+
+
+def cmdTemplateEngine(args: str) -> bool:
+    global templater
+    global loaded_templater
+
+    engine = args.lower().strip()
+    if engine == 'custom':
+        templater = CustomTemplater()
+    elif engine in ['jinja', 'jinja2']:
+        templater = JinjaTemplater()
+    elif engine in ['mustache','pystache']:
+        templater = PystacheTemplater()
+    elif engine in ['dummy', 'disabled']:
+        templater = DummyTemplater()
+    else:
+        die('Tried to use unsupported templating engine. Expected one of the following values: custom, jinja, jinja2, mustache, pystache, dummy, disabled')
 
 
 def cmdDelimiter(args: str):
     global delimiter
+    global templater
+
     match = re.match(r'^([^\s]+)\s*token\s*([^\s]+)$', args)
     if not match:
         die('Invalid syntax for delimiter')
     delimiter = [match[1], match[2]]
+    templater.update_delims()
     if verbose:
         print('Set delimiter to',delimiter[0],'token',delimiter[1])
 
@@ -257,7 +348,7 @@ def cmdTimeout(args: str):
 
 def cmdExit(args: str):
     try:
-        code = int(resolve(args).strip())
+        code = int(templater.apply(args).strip())
         sys.exit(code)
     except Exception as e:
         die(f'Exit not called with integer ({args}):\n{e}')
@@ -269,8 +360,8 @@ def cmdDefaultHeader(args: str):
     match = re.match(r'^([\w-]+):\s*(.*)$', args)
     if not match:
         die('Invalid format for defaultHeader')
-    key = resolve(match[1])
-    value = resolve(match[2]) if match[2] else ''
+    key = templater.apply(match[1])
+    value = templater.apply(match[2]) if match[2] else ''
 
     if value:
         defaultHeader[key] = value
@@ -285,56 +376,56 @@ def cmdDefaultHeader(args: str):
 
 
 def cmdSet(args: str):
-    global templates
+    global templater
 
     key = args.split(':',1)[0]
     value = args[len(key)+1:]
-    key = resolve(key.strip())
-    value = resolve(value.strip())
+    key = templater.apply(key.strip())
+    value = templater.apply(value.strip())
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in set')
 
     if value:
-        templates[key] = value
+        templater[key] = value
         if verbose:
             print(f'Set template "{key}" : "{value}"')
-    elif key in templates:
-        templates.pop(key)
+    elif key in templater:
+        templater.pop(key)
         if verbose:
             print(f'Cleared template "{key}"')
 
 
 def cmdParseTemplate(args: str):
-    global templates
+    global templater
 
     key = args.strip()
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in parseTemplate')
-    if key in templates:
-        value = resolve(templates[key])
+    if key in templater:
+        value = templater.apply(templater[key])
     else:
         value = ''
 
     if value:
-        templates[key] = value
+        templater[key] = value
         if verbose:
             print(f'Set template "{key}" : "{value}"')
-    elif key in templates:
-        templates.pop(key)
+    elif key in templater:
+        del templater[key]
         if verbose:
             print(f'Cleared template "{key}"')
 
 
 def cmdReplace(args: str):
-    global templates
+    global templater
 
     key = args.split(':',1)[0]
     value = args[len(key)+1:]
-    key = resolve(key.strip())
-    value = resolve(value.strip())
+    key = templater.apply(key.strip())
+    value = templater.apply(value.strip())
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in replace')
-    if not key in templates:
+    if key not in templater:
         die(f'Invalid call to replace, key "{key}" is unset')
 
     if len(value) < 4 or value[0] != 's':
@@ -361,31 +452,31 @@ def cmdReplace(args: str):
         else:
             die(f'Unknown regex flag {c} (Expected zero or more of: G, I, S, M)')
 
-    value = re.sub(pattern, replacement, templates[key], 0 if g else 1, flags)
+    value = re.sub(pattern, replacement, templater[key], 0 if g else 1, flags)
 
     if value:
-        templates[key] = value
+        templater[key] = value
         if verbose:
             print(f'SED set template "{key}" : "{value}"')
-    elif key in templates:
-        templates.pop(key)
+    elif key in templater:
+        del templater[key]
         if verbose:
             print(f'SED cleared template "{key}"')
 
 
 def cmdRead(args: str):
-    global templates
+    global templater
 
     file = args.split(':',1)[0]
     key = args[len(file)+1:]
-    key = resolve(key.strip())
+    key = templater.apply(key.strip())
     file = os.path.abspath(file.strip())
     if not re.match(r'^[\w-]+$', key):
         die(f'Invalid format of key "{key}" in set')
     if not os.path.isfile(file):
         die(f'Can not read form file "{file}"')
     with open(file) as f:
-        templates[key] = f.read()
+        templater[key] = f.read()
 
     if verbose:
         print(f'Read template "{key}" from file {file}')
@@ -394,7 +485,7 @@ def cmdRead(args: str):
 def cmdWrite(args: str):
     file = args.split(':',1)[0]
     value = args[len(file)+1:]
-    value = resolve(value.strip())
+    value = templater.apply(value.strip())
     file = os.path.abspath(file.strip())
     with open(file, 'w') as f:
         f.write(value)
@@ -405,7 +496,7 @@ def cmdWrite(args: str):
 
 
 def cmdPrint(args: str):
-    print(resolve(args.strip()))
+    print(templater.apply(args.strip()))
 
 
 def cmdMode(args: str):
@@ -487,7 +578,7 @@ def cmdSslContext(args: str):
         match = regexKeyValue.match(args)
         key = match[1].lower()
         try:
-            value = resolve(json.loads(match[2]))
+            value = templater.apply(json.loads(match[2]))
         except Exception as e:
             die(f'Invalid value for key {key} : {match[2]}')
         args = args[len(match[0]):]
@@ -509,7 +600,7 @@ def cmdSslContext(args: str):
     password = kvStore.get('password', None)
     if certfile:
         if password != None:
-            passfun = lambda : templates.get(password) if password in templates else die('Template for SSL Certificat KeyFile Password was not set')
+            passfun = lambda : templater[password] if password in templater else die('Template for SSL Certificat KeyFile Password was not set')
         else:
             passfun = None
         sslContext.load_cert_chain(certfile, keyfile, passfun)
@@ -589,22 +680,22 @@ def cmdSslContext(args: str):
 
 
 def cmdEval(args: str):
-    global templates
+    global templater
 
     key = args.split(':',1)[0]
     value = args[len(key)+1:].strip()
     key = key.strip()
 
-    result = evalJs(resolve(value))
+    result = evalJs(templater.apply(value))
     if isinstance(result, (int,float,str)):
         die('Evaluation result is not numeric or string')
 
     if result:
-        templates[key] = result
+        templater[key] = result
         if verbose:
             print('Set',key,'to',result,'<-',value)
-    elif key in templates:
-        templates.pop(key)
+    elif key in templater:
+        del templater[key]
         if verbose:
             print('Cleared',key,'from <-',value)
 
@@ -615,12 +706,12 @@ def cmdIf(args: str) -> bool:
 
 
 def makeRequest(method: str, url: str, header: 'dict[str,str]', body: str):
-    global templates
+    global templater
 
     if dryRun:
-        templates['response.code'] = 201 if method in ('PUT','POST','PATCH') else 200
-        templates['response.body'] = 'Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.'
-        templates['response.header'] = f"Content-Length: {len(templates['response.body'])}\r\nContent-Type: text/plain\r\nX-RestReplay: dryrun\r\n"
+        templater['response.code'] = 201 if method in ('PUT','POST','PATCH') else 200
+        templater['response.body'] = 'Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.'
+        templater['response.header'] = f"Content-Length: {len(templater['response.body'])}\r\nContent-Type: text/plain\r\nX-RestReplay: dryrun\r\n"
         time.sleep( min( max( timeout / 10, 0.1 ), 1.0 ) )
     else:
         urlParts = urlparse(urljoin(urlunparse(baseUrl), url)) if baseUrl else urlparse(url)
@@ -642,16 +733,16 @@ def makeRequest(method: str, url: str, header: 'dict[str,str]', body: str):
             if cookies:
                 director.add_handler(HTTPCookieProcessor(cookies))
             response: 'HTTPResponse' = director.open(request, timeout=timeout)
-            templates['response.code'] = response.status
-            templates['response.header'] = '\n'.join([f"{k}: {v}" for k,v in response.getheaders()])
-            templates['response.body'] = response.read().decode()
+            templater['response.code'] = response.status
+            templater['response.header'] = '\n'.join([f"{k}: {v}" for k,v in response.getheaders()])
+            templater['response.body'] = response.read().decode()
         except Exception as e:
             if verbose:
                 traceback.print_exc()
             die(f"Unexpected error during request\n{str(e)}")
 
     if verbose:
-        print('Request completed with code',str(templates['response.code']))
+        print('Request completed with code',str(templater['response.code']))
 
 
 def parseBodyRest(script: list[str]) -> tuple[list[str], dict[str,str], str]:
@@ -664,8 +755,8 @@ def parseBodyRest(script: list[str]) -> tuple[list[str], dict[str,str], str]:
             continue
         key = hdr.split(':',1)[0]
         value = hdr[len(key)+1:].strip()
-        key = resolve(key)
-        value = resolve(value)
+        key = templater.apply(key)
+        value = templater.apply(value)
         header[key.strip()] = value
         if verbose:
             print('Push header',key,':',value)
@@ -677,7 +768,7 @@ def parseBodyRest(script: list[str]) -> tuple[list[str], dict[str,str], str]:
         print('Body delimiter',bodyDelimiter.strip())
     try:
         endIndex = script.index(bodyDelimiter)
-        body = ''.join((resolve(line) for line in script[:endIndex]))
+        body = ''.join((templater.apply(line) for line in script[:endIndex]))
         line = line + endIndex
         script = script[endIndex+1:]
         if verbose:
@@ -739,6 +830,8 @@ def main(script: 'list[str]') -> int:
             filtered(cmdBaseUrl, rest)
         elif word1 == 'envFiles':
             filtered(cmdEnvFiles, rest)
+        elif word1 == 'templateEngine':
+            filtered(cmdTemplateEngine, rest)
         elif word1 == 'delimiter':
             filtered(cmdDelimiter, rest)
         elif word1 == 'timeout':
